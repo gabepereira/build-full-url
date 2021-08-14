@@ -2,37 +2,38 @@ import kebabCase from "lodash/kebabCase";
 
 import type { Options } from "../types";
 
-export default function buildFullUrl(opts: Options) {
-  let url: string = opts.baseUrl || "";
-  let endpoint = kebabCase(opts.name);
-  let qs = null;
+function buildFullUrl({
+  baseUrl,
+  id,
+  // Set default name
+  name = "",
+  // Set default path
+  path = "",
+  customPath,
+  query,
+  queryStringParser,
+  // Set kebabCase as default url parser
+  urlParser = kebabCase,
+}: Options) {
+  let url = baseUrl || "",
+    endpoint = urlParser(name + path),
+    qs = "";
 
-  if (opts.urlParser) {
-    endpoint = opts.urlParser(opts.name || "");
+  if (id && !customPath) {
+    endpoint += `/${id}`;
   }
 
-  if (opts.path) {
-    endpoint = opts.path;
+  // Replace id wildcard if exists
+  if (customPath) {
+    endpoint = id ? customPath.replace(":id", String(id)) : customPath;
   }
 
-  if (opts.id && !opts.customPath) {
-    endpoint += `/${opts.id}`;
-  }
+  // Remove any extra amount of slashes
+  endpoint = endpoint.replace(/\/\/+/g, "/");
 
-  if (opts.customPath) {
-    const customPath = opts.id
-      ? opts.customPath.replace(":id", String(opts.id))
-      : opts.customPath;
-
-    endpoint = customPath;
-  }
-
-  endpoint = endpoint.split("//").join("/");
-
+  // Using substring method to remove unnecessary slash
   if (endpoint.indexOf("/") == 0) {
-    let arrayEndpoint = endpoint.split("");
-    arrayEndpoint.shift();
-    endpoint = arrayEndpoint.join("");
+    endpoint = endpoint.substring(1, endpoint.length);
   }
 
   if (endpoint && url.lastIndexOf("/") != url.length - 1) {
@@ -41,51 +42,52 @@ export default function buildFullUrl(opts: Options) {
 
   url += endpoint;
 
-  if (opts.query) {
-    qs = "";
-    let options = Object.keys(opts.query);
-
-    for (let i = 0; i < options.length; i++) {
-      let value = opts.query[options[i]];
+  // Using higher order functions to improve code readability
+  if (query) {
+    Object.keys(query).forEach((key) => {
+      const value = query[key];
       if (value == null || Number.isNaN(value) || typeof value == undefined) {
-        delete opts.query[options[i]];
+        delete query[key];
       }
-    }
+    });
 
-    options = Object.keys(opts.query);
+    const options = Object.keys(query);
 
-    for (let i = 0; i < options.length; i++) {
-      let value = opts.query[options[i]];
-      let name = opts.queryStringParser
-        ? opts.queryStringParser(options[i])
-        : options[i];
+    options.forEach((option, i) => {
+      const value = query[option];
+      const name = queryStringParser ? queryStringParser(option) : option;
+
       if (
-        (typeof value == "string" ||
-          typeof value == "number" ||
-          typeof value == "boolean") &&
+        ["string", "number", "boolean"].includes(typeof value) &&
         !Number.isNaN(value)
       ) {
-        qs += name + "=" + value;
+        qs += `${name}=${value}`;
       } else {
-        value = value as Array<any>;
-        for (let u = 0; u < value.length; u++) {
-          qs += name + "[]=" + value[u];
-          if (u < value.length - 1) qs += "&";
-        }
+        const queryValues = value as Array<any>;
+
+        queryValues.forEach((item, j) => {
+          qs += `${name}[]=${item}`;
+
+          if (j < queryValues.length - 1) {
+            qs += "&";
+          }
+        });
       }
+
       if (i < options.length - 1) qs += "&";
-    }
+    });
   }
 
+  // Using substring method to remove unnecessary slash
   if (url.lastIndexOf("/") == url.length - 1) {
-    let arrayUrl = url.split("");
-    arrayUrl.pop();
-    url = arrayUrl.join("");
+    url = url.substring(0, url.length - 1);
   }
 
-  if (qs != null) {
-    url += "?" + qs;
+  if (qs.length) {
+    url += `?${qs}`;
   }
 
   return url;
 }
+
+export default buildFullUrl;
